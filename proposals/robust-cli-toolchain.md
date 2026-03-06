@@ -82,6 +82,9 @@ Developer Workflow:
 
 **Strategic alignment**: With 71% of Canton developers coming from Ethereum and "Local Development Frameworks" rated critical, this toolchain directly addresses the ecosystem growth mandate. It makes Canton accessible to Web3 developers accustomed to Foundry/Hardhat workflows while preserving Canton's enterprise-grade architecture.
 
+The CLI toolchain will be developed in Rust, chosen for its performance characteristics, memory safety guarantees, and excellent cross-platform support. Rust enables fast startup times critical for iterative development workflows, produces single-binary distributions without runtime dependencies, and aligns with modern CLI tooling trends (Foundry's forge/cast, ripgrep, etc.). The native Daml runtime prototype will also leverage Rust for reduced JVM startup overhead.
+
+
 ### Backward Compatibility
 
 Fully backward compatible. This is purely an off-chain developer tooling proposal. It interacts with standard Canton APIs (gRPC and JSON) and outputs standard DAR files. Existing Canton deployments, ledgers, and standard dpm workflows are completely unaffected.
