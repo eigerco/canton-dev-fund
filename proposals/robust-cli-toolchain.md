@@ -132,7 +132,6 @@ Deliverables:
 - Prototype/Release of a native (Rust-based) Daml test runner to significantly reduce base startup times.
 - Implementation of highly readable, modern error messaging.
 - "Dev-mode" execution tracing: exposing comprehensive call stacks and temporarily bypassing privacy-features locally to allow developers to rapidly diagnose failed transactions.
-- Dependency manager enhancements (proper separation of production and dev-dependencies).
 - `--output json` flag on all commands for structured, machine-readable responses.
 - `--fields` flag for field masking to limit response size and protect context windows.
 - `--dry-run` on mutation commands for safe exploration before commits.
