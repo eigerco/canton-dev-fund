@@ -16,7 +16,7 @@ The survey reveals that 71% of Canton developers come from Ethereum backgrounds,
 
 This proposal delivers a CLI toolchain that brings Canton to parity with modern Web3 developer expectations:
 
-- **Instant Networks**: One-command launch of sandbox, localnet, or multi-domain topologies with pre-allocated parties, auto-managed OAuth2 credentials, and optional Splice stack (Super Validator, Scan, Wallet).
+- **Instant Networks**: One-command launch of localnet, or multi-domain topologies with pre-allocated parties, auto-managed OAuth2 credentials, and optional Splice stack (Super Validator, Scan, Wallet).
 - **One-Liner Interactions**: Query packages, parties, templates, and contracts. Create contracts and exercise choices. All with single commands replacing multi-step API workflows.
 - **Intelligent Aliasing**: Human-readable names for parties, contracts, and packages replace 68-136 character hex IDs. Auto-aliasing on upload/create, prefix resolution, and interface-to-package discovery.
 - **Token Support**: Manage Amulet (Canton Coin) and CIP-56 compliant tokens - balances, transfers, allocations. Integrates with Splice stack's Scan/Registry APIs on localnet.
@@ -33,7 +33,7 @@ By providing familiar, single-command workflows inspired by Foundry, this toolch
 Deliver a unified CLI toolchain that streamlines Canton development, complementing the existing DPM stack. Core deliverables:
 
 - **Ledger CLI** (`canton call`, `canton query`): Single-command contract interactions with intelligent ID resolution. Auto-resolves package IDs, interface hierarchies, and party aliases. Supports `--dry-run` for transaction simulation.
-- **Network & Auth Manager** (`canton up`, `canton down`, `canton auth`): One-command launch of sandbox, localnet, or multi-domain topologies. Auto-provisions parties, manages OAuth2/JWT tokens transparently, supports `--with-splice` for Amulet/Scan/Wallet stack. Profile support for multiple environments.
+- **Network & Auth Manager** (`canton up`, `canton down`, `canton auth`): One-command launch of localnet, or multi-domain topologies. Auto-provisions parties, manages OAuth2/JWT tokens transparently, supports `--with-splice` for Amulet/Scan/Wallet stack. Profile support for multiple environments.
 - **Alias System**: Persistent human-readable aliases for contracts, parties, and packages. Auto-aliasing on upload/create, prefix resolution (`00abc` -> full ID), interface-to-package discovery.
 - **Token Management** (`canton wallet`): CIP-56 compliant token operations - balance queries, transfers (FOP), allocations (DVP), UTXO merging. Integrates with Scan/Registry APIs.
 - **Party Management** (`canton party`): Create parties and manage their rights. Get-or-create semantics (`canton party ensure alice`) solving collision issues.
@@ -49,14 +49,245 @@ The toolchain acts as an intelligent layer between developers and Canton's Ledge
 3. Discover `GetView` is on `Asset` interface, resolve interface package ID
 4. Execute via console, grpc or JSON api, return labeled output
 
-Aliases are stored in persistent directory with project-level `.canton.yaml` overrides. Auto-aliasing occurs on `canton upload` (packages) and `canton call --create` (contracts). Automatic cleanup on fresh network setups.
+Aliases are stored in persistent directory with project-level `.canton.yaml` overrides. Auto-aliasing occurs on `canton upload` (packages), localnet up / party allocation (parties) and `canton call [--create]` (contracts). Automatic cleanup on fresh network setups.
 
 **DPM Integration**: The CLI complements DPM rather than replacing it:
 - `canton upload --build ./main/` delegates to `dpm build`, then uploads
 - Uses `dpm inspect-dar` output for package metadata indexing
 - Same DAR artifacts, same ledger APIs - enhanced interaction ergonomics
 
-**Network Orchestration**: `canton up` wraps Docker Compose with presets (`--mode sandbox`, `--mode localnet`, `--topology multi-domain`). Credentials auto-provisioned and stored.
+**Network Orchestration**: `canton up` wraps Docker Compose with presets (`--with-ouath`, `--topology multi-domain`). Credentials auto-provisioned and stored.
+
+### Examples
+
+**Network Management:**
+```bash
+$ canton up --party alice --party bob --party bank
+✓ Canton localnet started on localhost:6865
+✓ JSON API on localhost:7575
+✓ Parties allocated:
+  alice → alice::1220abc... (alias: alice)
+  bob   → bob::1220def...   (alias: bob)
+  bank  → bank::1220789...  (alias: bank)
+✓ Auth token stored in ~/.canton/credentials
+
+$ canton down
+
+$ canton up --with-splice --with-oauth --party alice --sv bob-sv1 # Full stack with Amulet/Scan/Wallet
+
+$ canton up \
+  --name multi-domain-1 \
+  --domain trading:alice,bob \
+  --domain settlement:alice,bank \
+  --sync-domain global:sv1
+
+$ canton down multi-domain-1
+
+$ canton config set default-party alice
+$ canton config set default-participant localhost:6865
+$ canton config set output-format json
+```
+
+**Package upload:**
+```bash
+$ canton upload .daml/dist/*.dar --participant alice
+✓ Uploaded: ore-bank-main-0.0.1.dar
+  Package ID: 8b4c3d2e5f6a... (alias: @ore-bank-main)
+  Templates: OreToken
+```
+
+**Ledger Interaction:**
+```bash
+# secrets automatically provisioned
+$ canton call --create OreToken @bank @alice 100.00 --as bank,alice
+✓ Contract created: OreToken
+  Contract: 00abc123...
+  Transaction ID: tx-123456
+
+$ canton call @ore-token Split 30.0 --as alice
+✓ Choice exercised: Split
+  Contract: 00abc123...
+  Result:
+    newCid1: 00abc789... (alias: @ore-token-1)
+    newCid2: 00def456... (alias: @ore-token-2)
+  Transaction ID: tx-654321
+
+$ canton call @ore-token-1 GetView --as alice --json
+{
+  "assetOwner": "alice::1220abc...",
+  "description": "Magic Ore",
+  "quantity": 70.0
+}
+
+$ canton call @proposal Accept --act-as alice,bob --read-as auditor
+```
+
+**Queries:**
+```bash
+$ canton query contracts --template OreToken --as alice --json
+[
+  { "contractId": "00abc...", "grams": 100.0, "owner": "alice::1220abc..." },
+  { "contractId": "00def...", "grams": 75.0, "owner": "alice::1220abc..." }
+]
+
+$ canton query transactions --as alice --limit 10
+$ canton query parties
+$ canton query packages
+```
+
+**Party Management:**
+```bash
+$ canton party new alice --hint "Alice the Trader"
+# alias: @alice            -> "alice::1220abc..."
+# alias: @alice-the-trader -> "alice::1220abc..." (from hint, slugified)
+
+$ canton party ensure alice # Idempotent get-or-create
+```
+
+**Auth Management:**
+```bash
+# Get current token (auto-refreshes if expired)
+$ canton auth token
+
+# Show credential info
+$ canton auth status
+# Output:
+✓ Authenticated
+  Token expires: 2026-03-05 15:30:00 (29m remaining)
+  Endpoint: localhost:8080
+  Client: alice_wallet
+
+# Login (for localnet/production)
+$ canton auth login --client alice
+
+# Logout / clear credentials
+$ canton auth logout
+```
+
+**Token & Wallet:**
+```bash
+$ canton wallet balance --as alice
+$ canton wallet holdings --token "Gold Token" --as alice
+$ canton wallet transfer --to @bob --amount 50 --as alice
+$ canton wallet merge --token "Canton Coin" --as alice
+```
+
+**Verbose mode:**
+```bash
+$ canton call @ore-token GetView --as alice --verbose
+[resolve] @ore-token → 00abc123def456789...
+[resolve] alice → alice::1220abc123def456789...
+[infer] Template: Main:OreToken from package ore-bank-main (8b4c...)
+[infer] Choice GetView from interface Asset (ore-bank-interfaces, 7a3b...)
+[infer] Participant: participant1 (single participant)
+[infer] Offset: 00000000000000a5
+[auth] Using token from profile: default (expires in 28m)
+[exec] POST /v2/commands/submit-and-wait
+```
+
+**Dry-Run & AI Agent Support:**
+```bash
+canton call @token Split 30.0 --dry-run --as alice
+canton query contracts --as alice --output json --fields contractId,payload.grams
+canton schema call # JSON schema for command parameters
+```
+
+**For comparison, exercising GetView via JSON API today:**
+```bash
+$ source .env.alice_validator_wallet
+$ TOKEN=$(curl -s -X POST "http://keycloak.localhost:8082/realms/AppProvider/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "client_id=$CLIENT_ID" \
+    -d "client_secret=$CLIENT_SECRET" \
+    -d "grant_type=client_credentials" \
+    -d "scope=openid" | jq -r .access_token)
+
+# 1. Get party ID (68 chars)
+$ curl -s http://localhost:7575/v2/parties \
+  -H "Authorization: Bearer $TOKEN"
+{
+  "partyDetails": [
+    {"party": "Alice-9b3970be::1220..."},
+    {"party": "OreBank-d4d95138::1220..."}
+  ]
+}
+
+# 2. Query alice contract
+$ curl -X POST http://localhost:7575/v2/state/active-contracts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"filter":{"filtersByParty":{"alice::1220abc...":{"templateFilters":[...]}}}}'
+{
+  "contractEntry": {
+    "createdEvent": {
+      "contractId": "0038aa6ee4aee9838897aba6c1685fa10b19a4c8937c2f7ec5ad0ad447d691b0b1ca12122060df4f4a6d33a5886739c128381d8d6bf79b73eccaf6a5499cfc86c248a4ee86",
+      "templateId": "f6f30cd775711b761f6f06f3b7e0df9c9ab033f9c82f4c06184fab988059aa7c:Main:OreToken",
+      "createArguments": {
+        "issuer": "OreBank-d4d95138::...",
+        "owner": "Alice-9b3970be::...",
+        "grams": "100.0"
+      }
+    }
+  }
+}
+
+# 3. Get package id (GetView comes from interface which is different than contract's template id)
+# information what is the name of package with given id is present only in canton-console
+$ curl -s http://localhost:7575/v2/packages \
+  -H "Authorization: Bearer $TOKEN"
+{
+  "packageIds": [
+    "f6f30cd775711b761f6f06f3b7e0df9c9ab033f9c82f4c06184fab988059aa7c",
+    "e503a7f44411aea3e430b355ea395525e147bd3b07bfae52aabf4b64d6049447",
+    ...
+  ]
+}
+
+# 3. Exercise
+$ curl -s -X POST http://localhost:7575/v2/commands/submit-and-wait-for-transaction \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "commands": {
+      "userId": "json-user",
+      "commandId": "getview-001",
+      "actAs": ["Alice-9b3970be::1220b2f08ab0588eb8591ca46eec6ba9a54013134633098b355e96a64787db27ae9a"],
+      "commands": [{
+        "ExerciseCommand": {
+          "templateId": "e503a7f44411aea3e430b355ea395525e147bd3b07bfae52aabf4b64d6049447:Asset:Asset",
+          "contractId": "0038aa6ee4aee9838897aba6c1685fa10b19a4c8937c2f7ec5ad0ad447d691b0b1ca12122060df4f4a6d33a5886739c128381d8d6bf79b73eccaf6a5499cfc86c248a4ee86",
+          "choice": "GetView",
+          "choiceArgument": {}
+        }
+      }]
+    },
+    "transactionFormat": {
+      "eventFormat": {
+        "filtersByParty": {
+          "Alice-9b3970be::1220b2f08ab0588eb8591ca46eec6ba9a54013134633098b355e96a64787db27ae9a": {}
+        },
+        "verbose": true
+      },
+      "transactionShape": "TRANSACTION_SHAPE_LEDGER_EFFECTS"
+    }
+  }'
+{
+  "transaction": {
+    "events": [{
+      "ExercisedEvent": {
+        "choice": "GetView",
+        "exerciseResult": {
+          "assetOwner": "Alice-9b3970be::1220b2f08ab0588eb8591ca46eec6ba9a54013134633098b355e96a64787db27ae9a",
+          "description": "Magic Ore",
+          "quantity": "100.0000000000"
+        }
+      }
+    }]
+  }
+}
+```
+
+This example isn't that much different when using grpc or canton console, except that with console it is possible to get names of the packages together with their ids.
 
 ### Architectural alignment
 
@@ -110,7 +341,7 @@ Deliverables:
 - Multi-party authorization via `--act-as` and `--read-as` flags
 
 ### Evaluation metric 2: Local Environment Manager
-Focus: Zero-configuration local networks and sandbox environments.
+Focus: Zero-configuration local networks environments.
 Deliverables:
 - 1-click startup of ephemeral Canton environments.
 - Automatic provisioning of pre-funded, pre-allocated development parties.
@@ -151,8 +382,8 @@ Deliverables:
 
 ### Evaluation metric 2: Local Environment Manager
 
-- `canton up` launches sandbox with pre-allocated parties in a single command.
-- `canton up --mode localnet` launches full OAuth2-enabled environment with auto-managed credentials.
+- `canton up` launches localnet with pre-allocated parties in a single command.
+- `canton up --with-oauth` launches full OAuth2-enabled environment with auto-managed credentials.
 - `canton party ensure alice` succeeds idempotently (no "party already exists" errors).
 - Multi-domain topologies configurable via `--domain` and `--sync-domain` flags.
 
