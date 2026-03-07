@@ -4,27 +4,30 @@
 ### Status: Drafty McDraftFace
 ### Created:
 
-## NARRATIVE / FRAMING NOTE
+
+## TODO: remove - NARRATIVE / FRAMING NOTE
 
 The core value proposition of this proposal is bridging the UX/DX gap between broader Web3 development and Canton (Daml). Modern developers expect single-line CLI interactions, instant local networks with pre-funded accounts, and fast native compilation. Canton's enterprise-grade architecture currently requires developers to manage multiple containers, explicit hexadecimal IDs, and multi-step API workflows. By pitching a comprehensive, developer-first toolchain, we sell an ecosystem-growth narrative: to attract a wider pool of Web3 builders, Canton needs modern, frictionless developer ergonomics.
+
 
 ## Abstract
 
 (TODO: Insert Entity Name) requests a Development Fund grant to build an ergonomic CLI toolchain for Canton Network, directly addressing friction points identified in the [2026 Developer Survey](https://discuss.daml.com/t/canton-network-developer-experience-and-tooling-survey-analysis-2026/8412).
 
-The survey reveals that 71% of Canton developers come from Ethereum backgrounds, where tools like Foundry and Hardhat provide single-command workflows. Meanwhile, 41% of respondents cite environment setup as their biggest hurdle, and "Local Development Frameworks" was rated the most critical tooling gap. Developers specifically requested Hardhat/Anchor-style unified CLIs (11+ mentions) and Tenderly-like transaction simulation.
+The survey reveals that 71% of Canton developers come from Ethereum backgrounds, where tools like Foundry and Hardhat provide single-command workflows. Meanwhile, 41% of respondents cite environment setup as their biggest hurdle, and "Local Development Frameworks" was rated the most critical tooling gap. Developers specifically requested familiar unified CLIs (11+ mentions) and Tenderly-like transaction simulation.
 
-This proposal delivers a CLI toolchain that brings Canton to parity with modern Web3 developer expectations:
+This proposal delivers a CLI toolchain that brings Canton to parity with modern Web3 developer expectations. By providing familiar, powerful workflows inspired by Foundry, this toolchain lets developers focus on building applications rather than managing infrastructure. Quick prototyping, easy scripting, seamless CI integration, and first-class AI agent support lower the barrier to entry and accelerate Canton ecosystem growth. Even though APIs exposed with JSON-RPC, gRPC, console or even Postgres form a comprehensive and fully functional stack, they require bindings or other scaffolding on top of them to be used comfortably and ergonomically. This is where simple CLI tools shine: they require no additional setup and prioritize convenience over explicitness. Interaction is as simple as a command call, and most, if not all, environments can execute shell commands with no extra libraries or frameworks. Moreover, an executed command will look the same regardless of the language or environment it was run from. This makes them a perfect tool for testing, automated workflows, scripting and experimentation. That is also the main goal of the proposal. While for production use developers will likely choose gRPC or other well-established, mature protocols, having a way to inspect the state or make an interaction with a simple shell command is priceless, aiding debugging, prototyping and learning.
 
-- **Instant Networks**: One-command launch of localnet, or multi-domain topologies with pre-allocated parties, auto-managed OAuth2 credentials, and optional Splice stack (Super Validator, Scan, Wallet).
-- **One-Liner Interactions**: Query packages, parties, templates, and contracts. Create contracts and exercise choices. All with single commands replacing multi-step API workflows.
-- **Intelligent Aliasing**: Human-readable names for parties, contracts, and packages replace 68-136 character hex IDs. Auto-aliasing on upload/create, prefix resolution, and interface-to-package discovery.
-- **Token Support**: Manage Amulet (Canton Coin) and CIP-56 compliant tokens - balances, transfers, allocations. Integrates with Splice stack's Scan/Registry APIs on localnet.
-- **Native Runtime** (exploratory): Rust-based Daml interpreter for dry-run simulation and reduced JVM startup overhead.
-- **DPM Integration**: Complements existing DPM workflows - delegates builds to DPM, extends reach to runtime interaction.
+The main focus of the proposal is to complement existing tools in the ecosystem, like DPM, and provide developers with:
+
+- **Instant Networks**: One-command launch of localnet, or multi-domain topologies with pre-allocated parties, auto-managed OAuth2 credentials, and the global domain Splice stack (Super Validator, Scan, Wallet).
+- **One-Liner Interactions**: Query packages, parties, templates, and contracts. Create new contracts and exercise choices. All with simple one-line commands replacing multi-step API workflows.
+- **Intelligent Aliasing**: Human-readable names for parties, contracts, and packages replace 68-136 character hex IDs. Auto-aliasing whenever a new package, party, or contract is created. Automatic resolving of IDs based on prefix. Choice template and interface deduction if possible. Errors listing all possibilities on ambiguity.
+- **Token Support**: Manage Amulet (Canton Coin) and CIP-56 compliant tokens - balances, transfers and allocations. Integrate with Splice stack's Scan/Registry APIs on localnet.
+- **Native Runtime** (exploratory): Rust-based Daml interpreter for dry-running, simulation and debugging. Speed is an additional benefit due to elimination of JVM startup time, which becomes even more important when designing feedback loops for AI workflows.
+- **DPM Integration**: Complements existing DPM workflows - delegates builds to DPM, uses it to inspect DARs and validate packages.
 - **AI Agent Ready**: Structured JSON output, field masking to limit response size, dry-run modes for safe exploration, and queryable schemas - designed for agentic workflows from the start.
 
-By providing familiar, single-command workflows inspired by Foundry, this toolchain lets developers focus on building applications rather than managing infrastructure. Quick prototyping, easy scripting, seamless CI integration, and first-class AI agent support lower the barrier to entry and accelerate Canton ecosystem growth.
 
 ## Specification
 
@@ -49,126 +52,170 @@ The toolchain acts as an intelligent layer between developers and Canton's Ledge
 3. Discover `GetView` is on `Asset` interface, resolve interface package ID
 4. Execute via console, grpc or JSON api, return labeled output
 
-Aliases are stored in persistent directory with project-level `.canton.yaml` overrides. Auto-aliasing occurs on `canton upload` (packages), localnet up / party allocation (parties) and `canton call [--create]` (contracts). Automatic cleanup on fresh network setups.
+Aliases exist per network and their lifetimes are tied. Auto-aliasing occurs on `canton upload` (packages), localnet up / party allocation (parties) and `canton call [--create]` (contracts).
+
+Prefix-based resolution allows less typing whenever there is a single valid answer, the same way git allows using shorthand form of SHA-1 hashes.
+
+Choice resolution should happen whenever an unambiguous answer exists. Template choices should be prioritized over interfaces, but choices from interfaces should be resolved whenever possible. This can be achieved e.g. by inspecting the DALF artifacts of uploaded packages, indexed whenever `canton upload` is called.
 
 **DPM Integration**: The CLI complements DPM rather than replacing it:
 - `canton upload --build ./main/` delegates to `dpm build`, then uploads
 - Uses `dpm inspect-dar` output for package metadata indexing
 - Same DAR artifacts, same ledger APIs - enhanced interaction ergonomics
 
-**Network Orchestration**: `canton up` wraps Docker Compose with presets (`--with-ouath`, `--topology multi-domain`). Credentials auto-provisioned and stored.
+**Network Orchestration**: `canton up` wraps Docker Compose with presets (`--with-oauth`, `--topology multi-domain`). Credentials auto-provisioned and stored.
 
 ### Examples
 
+This section illustrates the vision and capabilities of the proposed toolkit, demonstrating the benefits and ease of use a native shell-driven approach can achieve.
+
 **Network Management:**
 ```bash
-$ canton up --party alice --party bob --party bank
+# quick localnet with single domain and automatic participant assignment
+$ canton up
 ✓ Canton localnet started on localhost:6865
 ✓ JSON API on localhost:7575
 ✓ Parties allocated:
   alice → alice::1220abc... (alias: alice)
+✓ Auth token stored in ~/.canton/networks/bold-isaac/credentials
+# named localnet with single domain and automatic participant assignment
+$ canton up --name mynetwork
+# localnet with single domain and specific participants pre-allocated
+$ canton up --party alice --party bob --party bank
+...
+✓ Parties allocated:
+  alice → alice::1220abc... (alias: alice)
   bob   → bob::1220def...   (alias: bob)
   bank  → bank::1220789...  (alias: bank)
-✓ Auth token stored in ~/.canton/credentials
-
+# shut down (if only one network is up or some is set as default)
 $ canton down
 
-$ canton up --with-splice --with-oauth --party alice --sv bob-sv1 # Full stack with Amulet/Scan/Wallet
-
+# localnet with OAuth, global domain, amulet/scan/wallet
+# and specific participants pre-allocated
+$ canton up --with-splice --with-oauth --party alice --sv bob-sv1
+# localnet with global domain, two user domains and some participants pre-allocated
 $ canton up \
   --name multi-domain-1 \
+  --with-splice \
   --domain trading:alice,bob \
-  --domain settlement:alice,bank \
-  --sync-domain global:sv1
-
+  --domain settlement:alice,bank
+# targeted shutdown
 $ canton down multi-domain-1
+```
 
-$ canton config set default-party alice
+**Configuration management**:
+```bash
+# custom aliases for anything, automatic ID resolving by prefix (if unambiguous)
+$ canton alias set alice-asset 00def456
+# set default participant to interact with
 $ canton config set default-participant localhost:6865
+# set default party to act as
+$ canton config set default-party alice
+# set default output format for commands
 $ canton config set output-format json
 ```
 
 **Package upload:**
 ```bash
-$ canton upload .daml/dist/*.dar --participant alice
+# upload a package from the current directory
+$ canton upload
 ✓ Uploaded: ore-bank-main-0.0.1.dar
   Package ID: 8b4c3d2e5f6a... (alias: @ore-bank-main)
   Templates: OreToken
+# upload specific dars to given participant
+$ canton upload .daml/dist/*.dar --participant alice
 ```
 
 **Ledger Interaction:**
 ```bash
-# secrets automatically provisioned
+# exercise the choice on the contract (or create it) with automatic authentication
+# and participant / domain deduction (if possible, e.g. by party)
+$ canton call [--create] MyTemplate arg1 arg2 ... --as myparty
+# create a contract from the template acting on behalf of two parties
 $ canton call --create OreToken @bank @alice 100.00 --as bank,alice
 ✓ Contract created: OreToken
-  Contract: 00abc123...
+  Contract: 00abc123... (alias: @ore-token)
   Transaction ID: tx-123456
-
+# exercise a choice on a contract
 $ canton call @ore-token Split 30.0 --as alice
 ✓ Choice exercised: Split
   Contract: 00abc123...
-  Result:
+  Result: (newCid1, newCid2)
     newCid1: 00abc789... (alias: @ore-token-1)
     newCid2: 00def456... (alias: @ore-token-2)
   Transaction ID: tx-654321
-
+# exercise a non-consuming choice on the contract and show output as JSON
 $ canton call @ore-token-1 GetView --as alice --json
 {
   "assetOwner": "alice::1220abc...",
   "description": "Magic Ore",
   "quantity": 70.0
 }
-
-$ canton call @proposal Accept --act-as alice,bob --read-as auditor
+# exercise a choice with an observer
+$ canton call @proposal Accept --as alice,bob --read-as auditor
 ```
 
 **Queries:**
 ```bash
+# query all contracts of the given template owned by alice
 $ canton query contracts --template OreToken --as alice --json
 [
   { "contractId": "00abc...", "grams": 100.0, "owner": "alice::1220abc..." },
   { "contractId": "00def...", "grams": 75.0, "owner": "alice::1220abc..." }
 ]
-
+# query last 10 alice transactions
 $ canton query transactions --as alice --limit 10
+# query all parties in the network
 $ canton query parties
+# query all uploaded packages
 $ canton query packages
 ```
 
 **Party Management:**
 ```bash
+# allocate a new party with the hint
 $ canton party new alice --hint "Alice the Trader"
-# alias: @alice            -> "alice::1220abc..."
-# alias: @alice-the-trader -> "alice::1220abc..." (from hint, slugified)
-
-$ canton party ensure alice # Idempotent get-or-create
+✓ Party created: "alice::1220abc..."
+  Aliases: @alice @alice-the-trader # automatic and from slugified hint
+# get or create party, infallible
+$ canton party ensure alice
 ```
 
 **Auth Management:**
 ```bash
-# Get current token (auto-refreshes if expired)
+# get current token (auto-refreshes if expired)
 $ canton auth token
-
-# Show credential info
+# show credential info
 $ canton auth status
-# Output:
 ✓ Authenticated
   Token expires: 2026-03-05 15:30:00 (29m remaining)
   Endpoint: localhost:8080
   Client: alice_wallet
-
-# Login (for localnet/production)
+# login (for localnet/production)
 $ canton auth login --client alice
-
-# Logout / clear credentials
+# logout / clear credentials
 $ canton auth logout
 ```
 
 **Token & Wallet:**
 ```bash
+# amulet/CC balance
 $ canton wallet balance --as alice
-$ canton wallet holdings --token "Gold Token" --as alice
+ASSET          BALANCE      LOCKED    AVAILABLE
+Canton Coin    1,250.50 CC  100.00    1,150.50
+# Detailed holdings (UTXO view)
+$ canton wallet balance --as alice --detailed
+CONTRACT_ID     AMOUNT      LOCKED_UNTIL    CREATED
+@holding-1      500.00 CC   -               2026-03-05 10:00
+@holding-2      450.50 CC   -               2026-03-05 11:30
+@holding-3      300.00 CC   2026-03-10      2026-03-05 12:00
+# faucet
+$ canton wallet tap --as alice
+# amulet transfer
 $ canton wallet transfer --to @bob --amount 50 --as alice
+# all holdings, amulet + cip-56
+$ canton wallet holdings --token "Gold Token" --as alice
+# utxo merging
 $ canton wallet merge --token "Canton Coin" --as alice
 ```
 
@@ -187,13 +234,17 @@ $ canton call @ore-token GetView --as alice --verbose
 
 **Dry-Run & AI Agent Support:**
 ```bash
+# dry-running a consuming choice by creating a temporary environment with current state, "cloning"
 canton call @token Split 30.0 --dry-run --as alice
+# limiting the output fields
 canton query contracts --as alice --output json --fields contractId,payload.grams
+# getting tool schema, help but for agents
 canton schema call # JSON schema for command parameters
 ```
 
 **For comparison, exercising GetView via JSON API today:**
 ```bash
+# 1. Auth
 $ source .env.alice_validator_wallet
 $ TOKEN=$(curl -s -X POST "http://keycloak.localhost:8082/realms/AppProvider/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
@@ -202,7 +253,7 @@ $ TOKEN=$(curl -s -X POST "http://keycloak.localhost:8082/realms/AppProvider/pro
     -d "grant_type=client_credentials" \
     -d "scope=openid" | jq -r .access_token)
 
-# 1. Get party ID (68 chars)
+# 2. Get party ID (68 chars)
 $ curl -s http://localhost:7575/v2/parties \
   -H "Authorization: Bearer $TOKEN"
 {
@@ -212,7 +263,7 @@ $ curl -s http://localhost:7575/v2/parties \
   ]
 }
 
-# 2. Query alice contract
+# 3. Query alice contract
 $ curl -X POST http://localhost:7575/v2/state/active-contracts \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -231,8 +282,8 @@ $ curl -X POST http://localhost:7575/v2/state/active-contracts \
   }
 }
 
-# 3. Get package id (GetView comes from interface which is different than contract's template id)
-# information what is the name of package with given id is present only in canton-console
+# 4. Get package ID (GetView comes from interface which is different than contract's template ID)
+# information about which package corresponds to a given ID is only available in canton-console
 $ curl -s http://localhost:7575/v2/packages \
   -H "Authorization: Bearer $TOKEN"
 {
@@ -243,7 +294,7 @@ $ curl -s http://localhost:7575/v2/packages \
   ]
 }
 
-# 3. Exercise
+# 5. Exercise
 $ curl -s -X POST http://localhost:7575/v2/commands/submit-and-wait-for-transaction \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
@@ -287,7 +338,26 @@ $ curl -s -X POST http://localhost:7575/v2/commands/submit-and-wait-for-transact
 }
 ```
 
-This example isn't that much different when using grpc or canton console, except that with console it is possible to get names of the packages together with their ids.
+This workflow is not much different when using gRPC or canton console, except that with console it is possible to get names of the packages together with their IDs, saving some trial-and-error time.
+
+The proposed CLI equivalent:
+
+```bash
+# 0.0. Auth, automatically handled within a network
+$ canton up --party alice --party bank
+
+# 0.1. Deployment, not even included above
+$ canton upload --build
+$ canton call --create OreToken @bank @alice 100.00
+
+# 1. Exercise the choice right away, using automatic aliases and party defaults
+$ canton call @ore-token-alice GetView --json
+{
+  "assetOwner": "Alice-9b3970be::1220b2f08ab0588eb8591ca46eec6ba9a54013134633098b355e96a64787db27ae9a",
+  "description": "Magic Ore",
+  "quantity": "100.0000000000"
+}
+```
 
 ### Architectural alignment
 
@@ -299,7 +369,7 @@ Developer Workflow:
   (compile DAR)        (deploy)           (interact)       (inspect)
 ```
 
-**Complementary, not competing**: DPM handles compilation, testing, and package management. This CLI handles network orchestration and ledger interaction. Same artifacts, same APIs, enhanced ergonomics.
+**Complementary, not competing**: DPM handles compilation, testing, and package management. This CLI handles network orchestration and ledger interaction. Same artifacts, same APIs, enhanced ergonomics. Proposed solution aims to fill the gaps rather than partitioning the ecosystem.
 
 **CLI next to RPC/gRPC/Console**: While Canton's existing API ecosystem is robust, efficient programmatic use requires language bindings, client libraries, or framework integration. A CLI enables quick prototyping without constructing complex JSON schemas - any shell script, CI pipeline, or development environment can invoke CLI commands directly. This lowers the barrier for exploration and rapid iteration.
 
@@ -313,12 +383,12 @@ Developer Workflow:
 
 **Strategic alignment**: With 71% of Canton developers coming from Ethereum and "Local Development Frameworks" rated critical, this toolchain directly addresses the ecosystem growth mandate. It makes Canton accessible to Web3 developers accustomed to Foundry/Hardhat workflows while preserving Canton's enterprise-grade architecture.
 
-The CLI toolchain will be developed in Rust, chosen for its performance characteristics, memory safety guarantees, and excellent cross-platform support. Rust enables fast startup times critical for iterative development workflows, produces single-binary distributions without runtime dependencies, and aligns with modern CLI tooling trends (Foundry's forge/cast, ripgrep, etc.). The native Daml runtime prototype will also leverage Rust for reduced JVM startup overhead.
-
+**Technology tailored to the problem**: The CLI toolchain will be developed in Rust, a current go-to language for shell tools. Chosen for its performance characteristics, static linkage, memory safety guarantees, and excellent cross-platform support. Rust enables fast startup times critical for iterative development workflows, produces single-binary distributions without runtime dependencies at native speed, and aligns with modern CLI tooling trends (Foundry's forge/cast, ripgrep, etc.). The native Daml runtime prototype will also leverage Rust for reduced JVM startup overhead.
 
 ### Backward Compatibility
 
-Fully backward compatible. This is purely an off-chain developer tooling proposal. It interacts with standard Canton APIs (gRPC and JSON) and outputs standard DAR files. Existing Canton deployments, ledgers, and standard dpm workflows are completely unaffected.
+Fully backward compatible. This is purely an off-chain developer tooling proposal. It interacts with standard Canton APIs (gRPC and JSON) and provides an ergonomic layer over them. Existing Canton deployments, ledgers, and standard DPM workflows are completely unaffected.
+
 
 ## Milestones and deliverables
 
@@ -338,16 +408,19 @@ Deliverables:
   - Interface-to-package discovery (if feasible, by inspecting uploaded DALF files)
   - Meaningful errors when resolution would be ambiguous
 - `canton upload` with optional `--build` delegation to DPM
-- Multi-party authorization via `--act-as` and `--read-as` flags
+- `canton config` for further optimizing / tailoring the toolkit
+- Multi-party authorization via `--as` and `--read-as` flags
 
 ### Evaluation metric 2: Local Environment Manager
-Focus: Zero-configuration local networks environments.
+
+Focus: Zero-configuration local network environments.
 Deliverables:
-- 1-click startup of ephemeral Canton environments.
+- One-click startup of ephemeral Canton environments with `canton up / down / auth`, including OAuth
 - Automatic provisioning of pre-funded, pre-allocated development parties.
 - Support for distinct multi-party, multi-domain topology presets without manual configuration file editing.
 
 ### Evaluation metric 3: Token & Wallet Support
+
 Focus: CIP-56 compliant token operations and Splice stack integration.
 Deliverables:
 - `canton wallet balance` and `canton wallet holdings` for Amulet (CC) and CIP-56 tokens
@@ -358,6 +431,7 @@ Deliverables:
 - Integration with Scan/Registry APIs for token metadata and transfer instructions
 
 ### Evaluation metric 4: Native Runtime, Debugging & AI Agent Support
+
 Focus: Speed, developer observability, and first-class support for agentic workflows.
 Deliverables:
 - Prototype/Release of a native (Rust-based) Daml test runner to significantly reduce base startup times.
@@ -369,23 +443,25 @@ Deliverables:
 - `canton schema <command>` exposing parameters, types, and constraints as queryable JSON.
 - Input validation with clear error messages for malformed parameters.
 
+
 ## Acceptance criteria
 
 ### Evaluation metric 1: Streamlined Ledger CLI
 
 - Developer can query and exercise choices using single CLI commands with human-readable aliases.
+- Authorization is properly handled based on the `--as` and `--read-as` params.
 - Queries support filtering: `canton query contracts --template OreToken --as alice` lists contracts by party and template.
 - Aliases auto-created on: `canton upload` (packages), `canton party new` (parties), and any `canton call` returning new contract IDs.
 - Prefix resolution works: `canton call 00abc GetView` resolves to full contract ID if unique.
 - Interface choices resolve to correct package ID (e.g., `GetView` on `Asset` interface).
-- Output includes clearly labeled fields in JSON or table format.
+- Ability to choose default networks, participants and parties using `canton config`.
 
 ### Evaluation metric 2: Local Environment Manager
 
 - `canton up` launches localnet with pre-allocated parties in a single command.
 - `canton up --with-oauth` launches full OAuth2-enabled environment with auto-managed credentials.
 - `canton party ensure alice` succeeds idempotently (no "party already exists" errors).
-- Multi-domain topologies configurable via `--domain` and `--sync-domain` flags.
+- Multi-domain topologies configurable via `--domain` flags.
 
 ### Evaluation metric 3: Token & Wallet Support
 
@@ -403,6 +479,7 @@ Deliverables:
 - `--fields` limits output to specified fields (e.g., `--fields contractId,payload.grams`).
 - `canton schema query` returns JSON describing available parameters and types.
 - AI agent can invoke commands and parse responses without custom integration code.
+
 
 ## Funding
 
@@ -422,10 +499,11 @@ Volatility handling: The monthly grants are denominated in Canton Coin (CC) usin
 
 ## Co-Marketing
 
-Upon each quarterly review period, [Team Name] will collaborate with Canton Foundation on:
+Upon each quarterly review period, (`TODO:` Team Name) will collaborate with Canton Foundation on:
 
 - Developer-focused technical blog posts demonstrating the new "web3-native" Canton workflows.
 - Video tutorials showcasing the CLI interacting with the ledger (e.g., "From Zero to Daml Deployment in 60 Seconds").
+
 
 ## Motivation
 
@@ -438,6 +516,7 @@ The [2026 Developer Survey](https://discuss.daml.com/t/canton-network-developer-
 - **JVM Startup Overhead**: The JVM-based runtime introduces startup latency that slows iterative development cycles.
 
 With 71% of developers coming from Ethereum (where Foundry/Hardhat provide single-command workflows), Canton needs equivalent ergonomics to capture this developer base. This toolchain removes these hurdles while preserving Canton's enterprise-grade architecture.
+
 
 ## Rationale
 
